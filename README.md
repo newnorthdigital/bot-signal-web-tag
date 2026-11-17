@@ -2,26 +2,30 @@
 
 A Google Tag Manager web tag that records browser behaviour a server can't see, for the [Bot Score by New North](https://github.com/newnorthdigital/nnd-bot-score) server-side variable.
 
-Bots that load real pages often scroll the page with `window.scrollTo`. That fires `scroll` events but no wheel, touch, key or pointer events. A person who scrolls always produces one of those. This tag spots the difference and writes it to a first-party cookie, so the server container can score the session.
+Version 2 loads New North's observer (`https://monitor.newnorth.nl/o.js`), the same script the NND Tag Monitor uses. It watches how the page is used and reports letters, never positions, timings, keys, text or identifiers, in two places: the dataLayer event `nnd_visitor_signal` with `nnd_hs: "2.<letters>"`, and the first-party cookie `_nnd_hs` (30 minutes, widest domain the browser accepts, so a same-site server container receives it).
 
-## Features
+## Letters (`2.<letters>`, sorted)
 
-- **Scripted-scroll detection**: flags a session that scrolled more than one viewport without any real input
-- **Automation flag**: flags `navigator.webdriver`
-- **Cautious with real people**: events dispatched by page code (`isTrusted` false) don't count as input. The script does not judge scrolling in the first second after load or a route change, on reloads and back/forward visits, when it loads after the visitor already scrolled (e.g. behind a consent banner), or while an on-screen iframe covering a quarter of the viewport (video, map, form) could have swallowed the input
-- **No identifiers**: the cookie `_nnd_hs` holds flags only, lives 30 minutes (sliding) and is set on the widest domain the browser accepts so a same-site server container receives it
-- **Consent Mode built in**: by default the tag waits for `analytics_storage`
-- **Small**: about 2 KB, listeners are passive and removed once real input is seen
-
-## Cookie format
-
-`_nnd_hs = 1.<flags>`, with flags:
-
-| Flag | Meaning |
+| Letter | Meaning |
 | --- | --- |
-| `i` | Real input seen in this session (wheel, touch, key, pointer, mouse move, click) |
-| `s` | Scrolled more than one viewport with no input at all |
-| `w` | `navigator.webdriver` is true |
+| `d` | `navigator.webdriver` is true |
+| `p` | a global an automation framework leaves on the page (Playwright, Selenium, PhantomJS) |
+| `z` | Chrome's own brand list names HeadlessChrome, whatever the user agent says |
+| `b` | keys in a burst: 3+ key gaps, median under 10 ms |
+| `e` | even typing: 4+ gaps, mean 20 ms or more, spread under 3 ms |
+| `i` | text inserted with no key pressed |
+| `k` | a keypress with no keydown before it |
+| `u` | an untrusted (script-dispatched) click or key |
+| `j` | a 400 px pointer jump in one move |
+| `r` | a scripted straight pointer line |
+| `s` | scrolled more than a viewport with no input at all (not judged in the first second, on reload or back/forward, when the page was already scrolled, or while a large iframe in view could have taken the input) |
+| `m` | an AI agent's on-page overlay (Claude in Chrome, Codex) |
+| `x` | an AI agent's browser global |
+| `q` | too little input to judge |
+
+[Bot Score by New North](https://github.com/newnorthdigital/nnd-bot-score) turns these into a score and a class (human, agent, crawler, bot). Input letters need two together to reach its default threshold and never count on a purchase. An agent's own traces make it an agent, a customer, not a bot.
+
+Version 1 (`1.<flags>`: `i` input seen, `s` scripted scroll, `w` webdriver) is still served from jsDelivr at `@1.0.0` for containers that installed it.
 
 ## Installation
 
@@ -50,16 +54,16 @@ Behaviour arrives after the landing `page_view`, so use the score to hold back c
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| **Consent behaviour** | Follow GTM Consent Mode | Wait for `analytics_storage`, or load immediately if you gate consent elsewhere. |
+| **Consent behaviour** | Follow GTM Consent Mode | Wait for `analytics_storage`, or load immediately. Bots never answer a consent banner, so waiting means most bots get no letters and Bot Score falls back to its header and IP checks; loading before consent reads device information and writes a cookie without consent, which needs your own legal basis. |
 | **Log to console** | off | Debug logging in GTM Preview. |
 
 ## Permissions
 
-- `inject_script`: `https://cdn.jsdelivr.net/gh/newnorthdigital/bot-signal-web-tag@1.0.0/bot-signal.js` only (the pinned release of `bot-signal.js` from this repo)
+- `inject_script`: `https://monitor.newnorth.nl/o.js*` only. The script is served unversioned, so a fix reaches every container without a template update; add `monitor.newnorth.nl` to a strict CSP `script-src`.
 - `access_consent`: read `analytics_storage`
 - `logging`: debug only
 
-The script itself is [`bot-signal.js`](./bot-signal.js) in this repo; the template loads a tagged release through jsDelivr.
+Version 1's script, [`bot-signal.js`](./bot-signal.js), stays in this repo for containers pinned to `@1.0.0`.
 
 ## Resources
 
